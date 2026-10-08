@@ -368,6 +368,53 @@ namespace BtModeSwitch
             return sb.ToString();
         }
     }
+    internal static class BrLinkTray
+    {
+        private const string ExePath = @"C:\Program Files (x86)\Barrot Technology Limited\BRLink\BRLinkTray.exe";
+        private static readonly object Gate = new object();
+
+        public static void EnsureRunning()
+        {
+            lock (Gate)
+            {
+                if (IsRunning()) return;
+                try
+                {
+                    Process process = Process.Start(ExePath);
+                    if (process != null) process.Dispose();
+                    Program.Log("BRLinkTray started");
+                }
+                catch (Exception error)
+                {
+                    Program.Log("BRLinkTray start failed: " + error.Message);
+                }
+            }
+        }
+
+        private static bool IsRunning()
+        {
+            string name = System.IO.Path.GetFileNameWithoutExtension(ExePath);
+            foreach (Process process in Process.GetProcessesByName(name))
+            {
+                try
+                {
+                    string path = process.MainModule.FileName;
+                    if (string.Equals(path, ExePath, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                catch
+                {
+                    // Имя совпало, но путь недоступен — считаем, что нужный процесс уже запущен.
+                    return true;
+                }
+                finally
+                {
+                    process.Dispose();
+                }
+            }
+            return false;
+        }
+    }
+
     internal static class Switch
     {
         public const string NamePart = "BRLINK";
@@ -379,6 +426,7 @@ namespace BtModeSwitch
 
         public static string Apply(Mode mode)
         {
+            BrLinkTray.EnsureRunning();
             int generation;
             lock (Gate) { generation = ++_generation; }
 
@@ -1027,6 +1075,7 @@ namespace BtModeSwitch
 
         public void Start()
         {
+            BrLinkTray.EnsureRunning();
             _micItem.Click += delegate { SetMode(Mode.Mic); };
             _listenItem.Click += delegate { SetMode(Mode.Listen); };
             _offItem.Click += delegate { SetMode(Mode.Off); };
